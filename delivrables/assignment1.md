@@ -1,44 +1,169 @@
-# Assignment 1 — Sujet ML
+# Assignment 1 — Définition du projet et exploration des données
 
-## Description du sujet
-Mon projet porte sur la prédiction de conversion client. L’objectif est de prédire si un utilisateur va effectuer un achat ou non à partir de données liées à son comportement sur un site ou une application.
-C’est un problème de classification binaire : le modèle doit prédire deux classes possibles, achat ou non-achat.
-Ce sujet est intéressant car il a une utilité business directe. Une entreprise peut utiliser ce type de modèle pour mieux cibler ses campagnes marketing, identifier les clients les plus susceptibles d’acheter et améliorer son taux de conversion.
+## Description du projet
 
-## Problématique
-Comment prédire la probabilité qu’un utilisateur réalise un achat à partir de ses données de navigation, de profil et d’interaction avec une plateforme ?
+Ce projet vise à prédire la **réussite scolaire d'un étudiant** à partir de ses caractéristiques personnelles, familiales et comportementales. L'objectif est d'identifier les élèves à risque d'échec avant les résultats finaux, afin de permettre une intervention pédagogique précoce.
 
-L’objectif serait de construire un modèle capable d’identifier les utilisateurs ayant une forte probabilité de conversion afin d’aider une entreprise à prioriser ses actions marketing.
+---
 
-## Dataset idéal
-Le dataset idéal contiendrait plusieurs types de variables :
+## Définition du problème
 
-- des informations utilisateur : âge, genre, pays, ville ;
-- des données de comportement : nombre de visites, temps passé sur le site, pages consultées, produits vus, panier abandonné ou non ;
-- des données marketing : source de trafic, campagne publicitaire, canal d’acquisition ;
-- des données historiques : nombre d’achats passés, montant moyen dépensé, ancienneté du client ;
-- une variable cible : achat ou non-achat.
+**Type de problème : Classification binaire**
 
-La variable cible serait donc binaire :
-0 = l’utilisateur n’a pas acheté  
-1 = l’utilisateur a acheté
+- **Variable cible** : `pass` — créée à partir de la note finale G3
+  - `1` (Réussite) si G3 ≥ 10
+  - `0` (Échec) si G3 < 10
+- **Entrées** : 30 features socio-démographiques, comportementales et scolaires
+- **Approche** : apprentissage supervisé
 
-## Description du dataset choisi
-Le dataset retenu est le Online Shoppers Purchasing Intention Dataset, téléchargé via Kaggle, qui héberge une copie conforme du dataset UCI original. Il contient les données de comportement de navigation de sessions sur un site e-commerce réel, collectées sur une période d'un an entre 2017 et 2018. Chaque ligne représente une session utilisateur unique, sans qu'un même utilisateur n'apparaisse deux fois.
-Le dataset contient 12 330 sessions et 17 features originales. La variable cible Revenue indique si la session s'est terminée par un achat. La distribution est fortement déséquilibrée : 84,5 % des sessions ne se terminent pas par un achat contre 15,5 % qui convertissent, ce qui est réaliste mais devra être traité.
-Les features couvrent le comportement de navigation (pages visitées, temps passé), des métriques d'engagement Google Analytics comme le taux de rebond, le taux de sortie et la valeur des pages (PageValues, la feature la plus corrélée à l'achat avec 0,49), ainsi que des variables contextuelles comme le mois, le type de visiteur ou le week-end.
+---
 
-## Méthode de collecte
-Le dataset a été téléchargé depuis Kaggle (https://www.kaggle.com/datasets/henrysue/online-shoppers-intention), copie du dataset UCI publié sous licence CC BY 4.0. Référence : Sakar, C. & Kastro, Y. (2018), https://doi.org/10.24432/C5F88Q.
-En complément, j'ai développé un script de scraping pour enrichir le dataset avec des features contextuelles externes : dates du Black Friday, Cyber Monday et Cyber Week calculées algorithmiquement, jours fériés américains via la librairie holidays, et dates historiques d'Amazon Prime Day. Ces données sont jointes sur la colonne Month et ajoutent 10 nouvelles features au dataset final.
+## Description du dataset
 
-## Justification du choix
-Ce dataset correspond directement à ma problématique, sa qualité est garantie par une publication académique (Neural Computing & Applications, 2019),les données sont sur une année complète. Il pose aussi de vrais défis ML : déséquilibre de classes, feature dominante, et saisonnalité marquée qui justifie l'enrichissement par scraping.
-Ce dernier point m'a amené à investiguer l'origine du site. Les corrélations montrent que les jours fériés américains expliquent bien les achats (0,149) alors que les soldes françaises sont quasi nulles (-0,024). Le pic de novembre correspond clairement au Black Friday. Le site est donc probablement américain ou international, ce qui a orienté tout l'enrichissement vers des événements commerciaux US.
+| Attribut | Valeur |
+|---|---|
+| **Source** | UCI Machine Learning Repository — Student Performance Dataset |
+| **Auteur** | Paulo Cortez, Université du Minho (Portugal) |
+| **Licence** | Open / usage académique libre |
+| **Lien** | https://archive.ics.uci.edu/ml/datasets/Student+Performance |
+| **Fichiers** | `studentmat.csv` (395 élèves, Mathématiques) + `studentpor.csv` (649 élèves, Portugais) |
+| **Total** | 1044 lignes après concaténation |
+| **Valeurs manquantes** | Aucune |
 
-## Objectif business et ML
-L'objectif business est d'identifier en cours de session les visiteurs les plus susceptibles d'acheter, pour déclencher au bon moment une offre personnalisée ou prioriser le service client. L'enjeu est d'augmenter le taux de conversion sans augmenter les coûts marketing.
-Du côté ML, il s'agit d'un problème de classification binaire supervisée.
+### Comment le dataset a été obtenu
 
-## Métrique d'évaluation envisagée
-L'accuracy est à exclure : un modèle prédisant systématiquement "pas d'achat" atteindrait 84,5 % sans rien apprendre. La métrique principale retenue est le F1-score sur la classe positive, complété par l'AUC-ROC pour la capacité discriminante globale. Le recall et la précision seront surveillés selon le coût métier des erreurs.
+Téléchargé directement depuis l'UCI ML Repository. Les deux fichiers CSV sont stockés dans `data/raw/`.
+
+### Localisation dans le repository
+
+```
+data/
+  raw/
+    studentmat.csv    ← dataset Mathématiques
+    studentpor.csv    ← dataset Portugais
+  processed/
+    student_processed.csv  ← dataset après feature engineering
+```
+
+### Comment utiliser les données
+
+```python
+import pandas as pd
+df_mat = pd.read_csv("data/raw/studentmat.csv", sep=";")
+df_por = pd.read_csv("data/raw/studentpor.csv", sep=";")
+```
+
+---
+
+## Description des features disponibles
+
+### Features démographiques
+| Feature | Type | Description |
+|---|---|---|
+| `school` | Binaire | École : GP (Gabriel Pereira) ou MS (Mousinho da Silveira) |
+| `sex` | Binaire | Sexe : F / M |
+| `age` | Numérique | Âge (15 à 22 ans) |
+| `address` | Binaire | Adresse : U (urbain) ou R (rural) |
+| `famsize` | Binaire | Taille famille : LE3 (≤3) ou GT3 (>3) |
+| `Pstatus` | Binaire | Statut parental : T (ensemble) ou A (séparés) |
+
+### Features familiales
+| Feature | Type | Description |
+|---|---|---|
+| `Medu` / `Fedu` | Numérique (0-4) | Niveau d'éducation de la mère / du père |
+| `Mjob` / `Fjob` | Nominal | Profession de la mère / du père |
+| `guardian` | Nominal | Tuteur légal : mère, père ou autre |
+| `famrel` | Numérique (1-5) | Qualité des relations familiales |
+| `famsup` | Binaire | Soutien éducatif familial |
+
+### Features scolaires
+| Feature | Type | Description |
+|---|---|---|
+| `reason` | Nominal | Raison du choix de l'école |
+| `traveltime` | Numérique (1-4) | Temps de trajet domicile-école |
+| `studytime` | Numérique (1-4) | Temps d'étude hebdomadaire |
+| `failures` | Numérique | Nombre d'échecs passés |
+| `schoolsup` | Binaire | Soutien scolaire supplémentaire |
+| `paid` | Binaire | Cours particuliers payants |
+| `absences` | Numérique | Nombre d'absences (0 à 93) |
+| `G1` / `G2` | Numérique (0-20) | Notes 1ère et 2ème période |
+| `G3` | Numérique (0-20) | Note finale (**non utilisée comme feature**) |
+
+### Features comportementales
+| Feature | Type | Description |
+|---|---|---|
+| `activities` | Binaire | Activités extra-scolaires |
+| `nursery` | Binaire | Crèche fréquentée |
+| `higher` | Binaire | Souhaite faire des études supérieures |
+| `internet` | Binaire | Accès internet à domicile |
+| `romantic` | Binaire | En couple |
+| `freetime` | Numérique (1-5) | Temps libre après l'école |
+| `goout` | Numérique (1-5) | Sorties avec les amis |
+| `Dalc` / `Walc` | Numérique (1-5) | Consommation d'alcool semaine / weekend |
+| `health` | Numérique (1-5) | État de santé actuel |
+
+---
+
+## Premières analyses exploratoires (EDA)
+
+Le notebook EDA est disponible dans : `notebooks/eda.ipynb`
+
+**Principales observations :**
+- **78% de réussite** (G3 ≥ 10) — classes légèrement déséquilibrées
+- `G1` et `G2` sont fortement corrélés à `G3` (signal prédictif majeur)
+- Les élèves avec plus d'échecs passés (`failures`) ont un taux de réussite nettement inférieur
+- Plus le temps d'étude est élevé, meilleur est le taux de réussite
+- La consommation d'alcool élevée est corrélée négativement aux résultats
+
+---
+
+## Objectif Business
+
+**Contexte** : Les établissements scolaires souhaitent réduire le taux d'échec en détectant tôt les élèves en difficulté.
+
+**Objectif** : Construire un modèle capable de prédire, à partir des caractéristiques d'un élève (sans attendre la note finale G3), s'il est susceptible de réussir ou d'échouer. Cela permet de déclencher un accompagnement personnalisé dès le début de l'année.
+
+---
+
+## Contexte Machine Learning
+
+| Élément | Choix |
+|---|---|
+| **Type de tâche** | Classification binaire supervisée |
+| **Variable cible** | `pass` (0 = échec, 1 = réussite) |
+| **Features utilisées** | 37 features (originales + engineered) |
+| **Modèles envisagés** | Régression Logistique, Random Forest, Gradient Boosting |
+| **Split** | 80% train / 20% test, stratifié |
+| **Validation** | Cross-validation 5-fold stratifiée |
+
+---
+
+## Métrique et fonction de coût envisagée
+
+**Métrique principale : F1-Score (macro)**
+
+Justification : les classes sont déséquilibrées (78% réussite / 22% échec). Le F1-Score pénalise les modèles qui ignorent la classe minoritaire (les élèves en échec), ce qui est exactement le cas d'usage critique ici — rater un élève en difficulté est plus coûteux que signaler un faux positif.
+
+**Métriques secondaires** :
+- Accuracy (lisibilité)
+- AUC-ROC (robustesse au seuil de décision)
+- Matrice de confusion (analyse des erreurs)
+
+---
+
+## Hypothèses, risques et limites identifiées
+
+### Hypothèses
+- Un étudiant avec G3 ≥ 10 est considéré comme ayant réussi
+- Les features G1 et G2 (notes intermédiaires) sont disponibles au moment de la prédiction
+- Les données des deux matières (Math + Portugais) sont suffisamment homogènes pour être combinées
+
+### Risques
+- **Data leakage** : G1 et G2 sont des notes intermédiaires — elles peuvent ne pas être disponibles en début d'année. Une version du modèle sans G1/G2 pourrait être nécessaire pour une prédiction en amont.
+- **Déséquilibre des classes** : 78% vs 22% — le modèle pourrait être biaisé vers la classe majoritaire.
+- **Généralisation** : le dataset est issu de deux lycées portugais spécifiques, ce qui limite la généralisation à d'autres contextes géographiques ou culturels.
+
+### Limites
+- Taille du dataset modeste (1044 lignes) — peu propice aux modèles profonds
+- Variables auto-déclarées (alcool, santé, relations) — potentiellement biaisées
+- Pas d'information temporelle (évolution de l'élève dans le temps)
