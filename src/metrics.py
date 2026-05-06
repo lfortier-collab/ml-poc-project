@@ -1,12 +1,10 @@
-"""Student-owned metrics contract.
-
-Students must implement ``compute_metrics`` to return the evaluation metrics
-that matter for their project.
-"""
-
-from __future__ import annotations
-
-from typing import Any
+from sklearn.metrics import (
+    f1_score,
+    accuracy_score,
+    roc_auc_score,
+    precision_score,
+    recall_score,
+)
 
 
 def compute_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
@@ -22,7 +20,11 @@ def compute_metrics(y_true: Any, y_pred: Any) -> dict[str, float]:
     - Keep metric names stable because they are written to
       ``results/model_metrics.csv``.
     """
-
-    raise NotImplementedError(
-        "Implement metrics.compute_metrics() before running scripts/main.py."
-    )
+    return {
+        "f1_macro":   float(f1_score(y_true, y_pred, average="macro")),
+        "f1_class0":  float(f1_score(y_true, y_pred, average=None)[0]),
+        "f1_class1":  float(f1_score(y_true, y_pred, average=None)[1]),
+        "precision":  float(precision_score(y_true, y_pred, average="macro", zero_division=0)),
+        "recall":     float(recall_score(y_true, y_pred, average="macro", zero_division=0)),
+        "accuracy":   float(accuracy_score(y_true, y_pred)),
+    }
