@@ -1,147 +1,174 @@
-# Assignment 2 — Preprocessing & Feature Engineering
+# Assignment 2 — Feature Engineering & Preprocessing
 
+## Fichiers concernés
 
-## 1. Choix structurant : suppression de G1 et G2
-
-Avant tout nettoyage, une analyse exploratoire a révélé que G1 et G2 sont corrélées à G3 avec des coefficients de **0.81 et 0.91**. Les inclure comme features poserait deux problèmes :
-
-- **Data leakage fonctionnel** : l'objectif est de détecter les élèves en difficulté *en début d'année*, avant les résultats intermédiaires. G1 et G2 ne sont pas disponibles à ce stade.
-- **Domination des features** : elles écraient toute l'information socio-démographique et comportementale, qui est au cœur du projet.
-
-→ G1, G2 et G3 sont supprimées. La cible `pass` (1 si G3 ≥ 10) est créée dès le chargement.
-
----
-
-## 2. Étapes de nettoyage des données
-
-### 2.1 Valeurs manquantes
-Aucune valeur manquante dans les deux datasets (`student-mat.csv` et `student-por.csv`). Aucune imputation nécessaire.
-
-### 2.2 Doublons
-Aucun doublon strict. Note : certains élèves apparaissent dans les deux datasets (math + portugais) — ce sont des observations légitimes pour deux cours différents, différenciées par la colonne `course`.
-
-### 2.3 Outliers — `absences`
-La variable `absences` présente des valeurs extrêmes (maximum : 75 jours, 99e percentile : ~30).
-
-**Action** : capping à 30 jours.
-
-**Justification** : seuls 6 élèves (< 1%) dépassent ce seuil. Ces valeurs extrêmes, si non traitées, biaisent le StandardScaler en dilatant l'échelle de la feature. On conserve l'information "très absent" sans laisser un cas isolé dicter l'échelle de toute la feature.
-
----
-
-## 3. Feature Engineering
-
-### 3.1 Observations qui ont motivé le feature engineering
-
-L'analyse exploratoire préalable (corrélations, distributions, heatmap) a identifié :
-
-| Observation | Feature créée |
+| Fichier | Rôle |
 |---|---|
-| `failures` : meilleur prédicteur négatif (-0.37) | Pondéré ×2 dans `risk_score` |
-| `Dalc` et `Walc` très corrélés (r > 0.6) | Fusionnés en `alc_total`, puis supprimés |
-| `Medu` et `Fedu` corrélés (r ~0.6) | Fusionnés en `parent_edu`, puis supprimés |
-| `studytime` positif, `goout` négatif | Interaction capturée par `study_vs_social` |
-| `higher` fort prédicteur positif | Combiné dans `motivated_with_resources` + `risk_score` |
+| `src/data.py` | Fonctions de chargement, nettoyage, feature engineering, encodage |
+| `src/metrics.py` | Calcul et comparaison des métriques d'évaluation |
+| `notebooks/preprocessing.ipynb` | Pipeline complet exécutable, produit les CSV |
 
-### 3.2 Nouvelles features créées
+## Données / Notebooks
+
+### Comment les datasets transformés ont été obtenus
+
+En exécutant `notebooks/preprocessing.ipynb` (Run All). Le notebook applique dans l'ordre : nettoyage → feature engineering → label encoding → split → OneHotEncoder → StandardScaler.
+
+### Où ils sont stockés
+
+```
+data/
+  raw/
+    student-mat.csv          ← données brutes Mathématiques
+    student-por.csv          ← données brutes Portugais
+  processed/
+    student_train.csv        ← X_train scalé + y_train  (Régression Logistique)
+    student_test.csv         ← X_test scalé  + y_test
+    student_train_raw.csv    ← X_train non scalé + y_train  (RF, Gradient Boosting)
+    student_test_raw.csv     ← X_test non scalé  + y_test
+```
+
+### Comment les charger et les utiliser
+
+```python
+import pandas as pd
+from pathlib import Path
+
+DATA = Path('data/processed')
+
+# Pour la Régression Logistique (données scalées)
+train = pd.read_csv(DATA / 'student_train.csv')
+test  = pd.read_csv(DATA / 'student_test.csv')
+X_train, y_train = train.drop(columns=['pass']), train['pass']
+X_test,  y_test  = test.drop(columns=['pass']),  test['pass']
+
+# Pour RF et Gradient Boosting (données non scalées)
+train_r = pd.read_csv(DATA / 'student_train_raw.csv')
+test_r  = pd.read_csv(DATA / 'student_test_raw.csv')
+X_train_r = train_r.drop(columns=['pass'])
+X_test_r  = test_r.drop(columns=['pass'])
+```
+
+---
+
+## 1. Étapes de nettoyage des données
+
+Le dataset Student Performance ne contient aucune valeur manquante ni doublon. Les opérations de nettoyage sont toutes **déterministes** (seuils codés en dur) — applicables avant le split sans data leakage.
+
+### 1.1 Valeurs manquantes
+- **Résultat** : 0 valeur manquante sur 1044 lignes
+- **Action** : aucune imputation nécessaire
+
+### 1.2 Doublons
+- **Résultat** : 0 doublon strict
+- **Action** : aucune suppression
+
+### 1.3 Capping des absences à 30
+La variable `absences` est très asymétrique (max=75, p99≈30, médiane≈4). On plafonne à 30 — seuil fixe, non calculé depuis les données, donc sans leakage.
+
+### 1.4 Suppression de G1, G2, G3
+- **G1 et G2** : notes intermédiaires non disponibles en début d'année — les inclure viderait l'objectif de détection précoce
+- **G3** : source de la variable cible `pass`, sa présence constituerait un leakage direct
+
+---
+
+## 2. Transformations appliquées
+
+### 2.1 Label encoding des variables binaires — avant le split
+
+Mappings fixes (rien appris depuis les données) → applicables avant le split.
+
+| Colonne | Mapping |
+|---|---|
+| `schoolsup`, `famsup`, `paid`, `activities`, `nursery`, `higher`, `internet`, `romantic` | `yes` → 1, `no` → 0 |
+| `sex` | `F` → 1, `M` → 0 |
+| `address` | `U` → 1, `R` → 0 |
+| `famsize` | `GT3` → 1, `LE3` → 0 |
+| `Pstatus` | `T` → 1, `A` → 0 |
+| `school` | `GP` → 1, `MS` → 0 |
+
+**Justification** : mapping direct, aucune perte d'information, aucun paramètre appris.
+
+### 2.2 One-Hot Encoding des variables nominales — après le split, fit sur train uniquement
+
+Les colonnes nominales multi-classes (`Mjob`, `Fjob`, `reason`, `guardian`, `course`) sont encodées via `OneHotEncoder(handle_unknown='ignore')`, fitté uniquement sur `X_train`.
+
+**Justification** : le OHE apprend le vocabulaire des catégories — le fitter sur le dataset entier ferait fuiter des informations du test set. `handle_unknown='ignore'` garantit qu'une catégorie inconnue dans le test produit une ligne nulle sans erreur.
+
+**Pourquoi pas `pd.get_dummies`** : il ne mémorise pas les catégories vues au fit — risque de colonnes divergentes entre train et test.
+
+### 2.3 StandardScaler — après le split, fit sur train uniquement
+
+Toutes les features numériques sont centrées-réduites (µ=0, σ=1). Le scaler est fitté uniquement sur `X_train`, puis appliqué sur train et test séparément.
+
+**Justification** : requis pour la Régression Logistique (convergence du gradient). Les modèles arborescents sont insensibles au scaling — deux versions des données sont produites (scalée et non scalée).
+
+---
+
+## 3. Nouvelles features créées
+
+Toutes les nouvelles features sont des **fonctions déterministes** des colonnes existantes. Aucune statistique n'est apprise — elles peuvent être créées avant le split sans leakage.
 
 | Feature | Construction | Justification |
 |---|---|---|
-| `alc_total` | `Dalc + Walc` | Dalc et Walc mesurent le même comportement (alcool) sous deux angles corrélés. Un score unique réduit la redondance. |
-| `alc_high_risk` | `alc_total >= 5` (binaire) | Seuil à 50% du max (10) — capte un risque comportemental élevé. |
-| `parent_edu` | `(Medu + Fedu) / 2` | Capital éducatif moyen du foyer. Medu et Fedu corrélés → un seul score évite la multicolinéarité. |
-| `study_vs_social` | `studytime - goout` | Capture l'arbitrage entre temps d'étude et vie sociale — dynamique absente des features brutes. |
-| `motivated_with_resources` | `higher == 'yes' AND internet == 'yes'` | Motivation + ressources numériques : combinaison plus prédictive que les deux séparément. |
-| `family_capital` | `parent_edu × famrel` | Des parents éduqués dans un foyer aux relations dégradées ont un impact limité. |
-| `has_support` | `schoolsup == 'yes' OR famsup == 'yes'` | Présence d'au moins une source de soutien actif. |
-| `digital_access` | `address == 'U' AND internet == 'yes'` | Élève urbain avec internet = meilleures ressources de travail à domicile. |
-| `risk_score` | `failures×2 + alc_high_risk + (absences>10) + (studytime==1) - (higher=='yes')`, clippé à 0 | Score composite des facteurs d'échec les plus prédictifs. `failures` pondéré ×2 car c'est le signal le plus fort (-0.37). `higher` soustrait comme facteur protecteur. |
+| `alc_total` | `Dalc + Walc` | `Dalc` et `Walc` corrélés (r > 0.6) — somme réduit la redondance, signal alcool plus stable |
+| `alc_high_risk` | `alc_total ≥ 5` | Seuil fixe — distingue consommation modérée vs à risque (r = -0.18 avec pass) |
+| `parent_edu` | `(Medu + Fedu) / 2` | `Medu` et `Fedu` corrélés (r ≈ 0.6) — moyenne capture le capital éducatif familial sans multicolinéarité |
+| `study_vs_social` | `studytime - goout` | Arbitrage étude / vie sociale — signal composite plus fort que chaque variable seule |
+| `motivated_with_resources` | `higher==yes AND internet==yes` | Motivation + accès aux ressources — les deux ensemble sont plus prédictifs que séparément |
+| `family_capital` | `parent_edu × famrel` | Parents éduqués dans un bon contexte familial — effet multiplicatif |
+| `has_support` | `schoolsup==yes OR famsup==yes` | Au moins une source de soutien — OR car les deux sont substituables |
+| `digital_access` | `address==U AND internet==yes` | Bonnes conditions de travail à domicile |
+| `risk_score` | combinaison pondérée | Score composite des principaux facteurs d'échec identifiés dans l'EDA |
 
-**Features supprimées après engineering** : `Dalc`, `Walc`, `Medu`, `Fedu` — remplacées par des features plus riches et moins redondantes.
-
----
-
-## 4. Transformations appliquées
-
-### 4.1 Encoding
-
-| Type | Colonnes | Méthode |
-|---|---|---|
-| Binaires yes/no | `schoolsup`, `famsup`, `paid`, `activities`, `nursery`, `higher`, `internet`, `romantic` | Label encoding (0/1) |
-| Binaires 2 valeurs | `sex`, `address`, `famsize`, `Pstatus`, `school` | Label encoding (0/1) |
-| Nominales multi-classes | `Mjob`, `Fjob`, `reason`, `guardian`, `course` | One-Hot Encoding |
-
-### 4.2 Scaling
-
-**StandardScaler** (µ=0, σ=1) appliqué sur l'ensemble des features.
-
-**Quand utilisé** : obligatoire pour la PCA (sensible aux échelles), recommandé pour la régression logistique (convergence, régularisation). Inutile pour Random Forest et Gradient Boosting (splits insensibles aux échelles) mais le dataset scalé est fourni pour tous les modèles.
-
-### 4.3 PCA
-
-Une PCA complète a été appliquée et analysée (scree plot, variance cumulée, projection 2D).
-
-**Résultat** : atteindre 90% de variance requiert 58% des dimensions originales — gain marginal. Les deux classes se chevauchent fortement dans l'espace PC1/PC2.
-
-**Décision : PCA non retenue pour le modèle principal.**
-
----
-
-## 5. Justification des choix
-
-| Choix | Justification |
-|---|---|
-| Capping absences à 30 | Robustesse du scaling, préservation du signal "fort absentéisme" |
-| Suppression G1/G2 | Data leakage fonctionnel + objectif de détection précoce |
-| Fusion Dalc+Walc | Réduction multicolinéarité, information équivalente en un seul score |
-| Fusion Medu+Fedu | Idem — capital éducatif parental = concept unique |
-| Failures ×2 dans risk_score | Corrélation la plus forte avec la cible (-0.37) |
-| One-Hot sur nominales | Aucun ordre entre catégories (Mjob, Fjob...) — ordinal encoding créerait un ordre artificiel |
-| StandardScaler vs MinMaxScaler | Plus robuste aux asymétries résiduelles après capping |
-| PCA non retenue | Gain limité, perte d'interprétabilité critique dans un contexte éducatif |
-
----
-
-## 6. Alternatives testées et non retenues
-
-| Alternative | Pourquoi non retenue |
-|---|---|
-| **Garder G1 et G2** | Data leakage fonctionnel — non disponibles en début d'année ; corrélation > 0.8 avec G3 écrase les autres features |
-| **Ordinal encoding** sur Mjob, Fjob, reason, guardian | Introduit un ordre artificiel entre catégories sans relation ordinale ("teacher > health" n'a aucun sens) |
-| **Target encoding** | Risque de fuite d'information sur un dataset de 1044 lignes. Nécessiterait une validation croisée interne pour éviter l'overfitting |
-| **MinMaxScaler** | Sensible aux valeurs extrêmes résiduelles (absences), moins robuste que StandardScaler pour des distributions asymétriques |
-| **PCA pour le modèle principal** | Gain de compression marginal (~58% des dims pour 90% de variance) ; classes non séparables dans l'espace réduit ; perte d'interprétabilité des features individuelles (essentielle pour identifier les facteurs de risque) |
-| **Conserver Dalc et Walc séparément** | Corrélation r > 0.6 entre eux — redondance utile à réduire pour les modèles linéaires |
-| **Log-transform des absences** | Capping à 30 suffit et préserve mieux l'interprétabilité |
-| **parent_edu_gap** (écart Medu-Fedu) | Corrélation quasi-nulle avec la cible (r ≈ -0.01) — feature non informative |
-
----
-
-## 7. Impact attendu des transformations sur les modèles
-
-### 7.1 Nettoyage
-- **Suppression G1/G2** : les modèles devront trouver le signal dans les features socio-démographiques et comportementales. Les performances seront moindres qu'avec G1/G2, mais le modèle sera réellement utile en pratique.
-- **Capping absences** : évite que les valeurs extrêmes biaisent la régularisation des modèles linéaires et le scaling pour la PCA.
-
-### 7.2 Feature Engineering
-- **`risk_score`** : fournit un signal agrégé fort que les modèles linéaires peuvent exploiter directement. Pour les modèles arborescents, les features composantes individuelles sont déjà disponibles.
-- **`study_vs_social`** : capture une interaction que les modèles linéaires ne peuvent pas construire eux-mêmes (interaction multiplicative/additive entre features).
-- **`motivated_with_resources`** : interaction logique que ni Random Forest ni Gradient Boosting ne construisent nécessairement sans feature explicite.
-- **Suppression Dalc/Walc/Medu/Fedu** : réduit la multicolinéarité, ce qui améliore la stabilité des coefficients en régression logistique.
-
-### 7.3 Encoding & Scaling
-- **One-Hot** : rend les nominales exploitables par tous les modèles, sans biais ordinal.
-- **StandardScaler** : crucial pour la régression logistique (L1/L2 régularisation équitable entre features). Neutre pour RF/GBM.
-
-### 7.4 PCA (si utilisée avec régression logistique)
-- Élimine la multicolinéarité résiduelle entre features OHE.
-- Coût : perte totale de l'interprétabilité — les coefficients du modèle ne correspondent plus à des features métier.
-
----
-
-## 8. Datasets produits
-
-  student_processed.csv   ← dataset encodé, non scalé (pour RF, GBM)
-  student_scaled.csv      ← dataset encodé + scalé (pour Régression Logistique)
-  student_pca.csv         ← dataset réduit PCA 90% variance (option)
+**Formule du `risk_score`** :
 ```
+risk_score = failures × 2
+           + alc_high_risk
+           + (absences > 10)
+           + (studytime == 1)
+           - (higher == yes)
+clipé à 0 minimum
+```
+`failures` est pondéré ×2 car c'est le prédicteur le plus fort (r = -0.37 avec pass).
+
+**Colonnes supprimées après FE** : `Dalc`, `Walc`, `Medu`, `Fedu` (remplacées par leurs agrégats).
+
+---
+
+## 4. Alternatives testées et non retenues
+
+| Transformation | Résultat | Raison du rejet |
+|---|---|---|
+| `avg_grade_12 = (G1 + G2) / 2` | Amélioration massive | **Data leakage** — G1/G2 non disponibles en début d'année |
+| LabelEncoder pour les nominales multi-classes | Performances comparables | Introduit un ordre artificiel entre catégories qui n'existe pas — OHE plus correct |
+| MinMaxScaler | Performances comparables | Sensible aux outliers (`absences` jusqu'à 75 avant capping) |
+| RobustScaler | Différence < 0.3% sur F1 | StandardScaler suffit après capping — complexité inutile |
+| PCA (95% variance) | ΔF1 = -0.017 | Nécessite 28/40 composantes (réduction 24%) — perte d'interprétabilité sans gain |
+| `age²` | Amélioration < 0.1% | Corrélation faible de l'âge avec pass (r = -0.12) |
+
+---
+
+## 5. Justification des choix effectués
+
+### Pourquoi le split avant l'OHE et le scaler ?
+
+Le OHE et le StandardScaler **apprennent depuis les données**. Les fitter sur le dataset entier avant le split fait fuiter des informations du test set dans le pipeline — data leakage qui surestime les performances. Les transformations déterministes (capping, sommes, mappings fixes) n'apprennent rien et peuvent être appliquées avant le split.
+
+### Pourquoi deux versions des données ?
+
+La Régression Logistique requiert des données scalées. Random Forest et Gradient Boosting sont arborescents — insensibles à l'échelle. On produit une version scalée et une non scalée ; chaque modèle consomme la version adaptée.
+
+---
+
+## 6. Impact attendu des transformations sur les modèles
+
+| Transformation | Régression Logistique | Random Forest / Gradient Boosting |
+|---|---|---|
+| StandardScaler | Indispensable — convergence du gradient | Aucun effet |
+| OHE des nominales | Indispensable | Indispensable |
+| `risk_score` | Fort — linéarise une combinaison de facteurs d'échec | Modéré — les arbres trouvent ces combinaisons seuls, mais `risk_score` les guide |
+| `alc_total` | Modéré — réduit la multicolinéarité Dalc/Walc | Faible — les arbres gèrent la redondance |
+| `study_vs_social` | Modéré — interaction non modélisable nativement par LR | Faible — les arbres capturent l'interaction seuls |
+| Capping absences | Faible — réduit l'influence des outliers sur le scaler | Très faible — les arbres sont insensibles aux outliers |
+| Suppression G1/G2 | Forte dégradation volontaire — prédiction honnête en début d'année | Idem |
