@@ -53,7 +53,7 @@ X_test_r  = test_r.drop(columns=['pass'])
 
 ## 1. Étapes de nettoyage des données
 
-Le dataset Student Performance ne contient aucune valeur manquante ni doublon. Les opérations de nettoyage sont toutes **déterministes** (seuils codés en dur) — applicables avant le split sans data leakage.
+Le dataset Student Performance ne contient aucune valeur manquante ni doublon. Les opérations de nettoyage sont toutes **déterministes**  et applicables avant le split sans data leakage.
 
 ### 1.1 Valeurs manquantes
 - **Résultat** : 0 valeur manquante sur 1044 lignes
