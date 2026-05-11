@@ -1,8 +1,12 @@
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
+from typing import Any
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 
 # ── Constantes ────────────────────────────────────────────────────────────────
@@ -16,8 +20,8 @@ NOMINAL_COLS   = ['Mjob', 'Fjob', 'reason', 'guardian', 'course']
 # ── Pipeline interne ───────────────────────────────────────────────────────────
 
 def _load_raw() -> pd.DataFrame:
-    df_mat = pd.read_csv('student-mat.csv', sep=';')
-    df_por = pd.read_csv('student-por.csv', sep=';')
+    df_mat = pd.read_csv(_DATA_DIR / 'student-mat.csv', sep=';')
+    df_por = pd.read_csv(_DATA_DIR / 'student-por.csv', sep=';')
     df_mat['course'] = 'math'
     df_por['course'] = 'portuguese'
     df = pd.concat([df_mat, df_por], ignore_index=True)
