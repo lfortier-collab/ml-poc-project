@@ -1,3 +1,5 @@
+from typing import Any
+
 from sklearn.metrics import (
     f1_score,
     accuracy_score,
