@@ -1,140 +1,171 @@
-# Assignment 5 — Justification des choix techniques
+# Assignment 5 — Interface Streamlit : Student Success Predictor
 
 ---
 
-## 1. Seuil de réussite : G3 ≥ 10
+## 1. Description de l'application
 
-**Choix** : un élève est considéré comme ayant réussi si sa note finale G3 est supérieure ou égale à 10.
-
-**Justification** :
-- Le système scolaire portugais utilise une notation sur 20. La note de passage officielle est **10/20**, ce seuil reflète donc directement la réalité institutionnelle.
-- Ce n'est pas un seuil arbitraire : c'est la frontière réglementaire qui détermine si un élève valide son année.
-- La distribution de G3 présente une bimodalité autour de 0 (abandons) et 12-13 (réussites typiques), avec peu d'élèves entre 8 et 11 — le seuil à 10 coupe naturellement les deux populations.
+**Student Success Predictor** est une application Streamlit interactive qui permet d'explorer, comprendre et utiliser trois modèles de machine learning entraînés pour prédire la réussite scolaire d'élèves portugais en fin d'année. L'application s'appuie sur le dataset UCI Student Performance (matières mathématiques et portugais, 1 044 élèves au total) et expose les résultats de manière visuelle et pédagogique.
 
 ---
 
-## 2. Seuil de décision : 0.5
+## 2. Objectif de l'interface
 
-**Choix** : dans la page de démonstration, un élève est prédit "Réussite" si P(réussite) ≥ 0.5, "Échec" sinon.
+L'interface poursuit trois objectifs complémentaires :
 
-**Justification** :
-- Le seuil 0.5 est le seuil neutre : il minimise l'erreur globale quand les coûts des deux types d'erreur sont équivalents.
-- **Pourquoi ne pas l'abaisser pour détecter plus d'élèves en échec ?** En production (intervention pédagogique réelle), abaisser le seuil augmente le rappel sur la classe "Échec" mais génère plus de faux positifs — des élèves qui réussissent et qui mobiliseraient inutilement des ressources. Le seuil optimal dépend du contexte métier et du coût relatif de chaque erreur.
-- Le seuil 0.5 est retenu ici comme **valeur de référence interprétable** pour la démonstration. En production, il serait calibré sur les données de validation en maximisant le F1-score sur la classe "Échec".
-
----
-
-## 3. Split train/test : 80 % / 20 %
-
-**Choix** : 835 exemples en train, 209 en test (`random_state=42`, `stratify=y`).
-
-**Justification** :
-- Le dataset contient 1 044 lignes — un dataset de taille modeste. Avec un split 80/20, on conserve **835 exemples pour l'entraînement**, ce qui est suffisant pour entraîner les 3 modèles sans underfitting.
-- Le test set de **209 exemples** est assez grand pour produire des métriques stables : avec 22 % de taux d'échec, on obtient ~46 vrais négatifs, ce qui permet d'estimer le F1 sur la classe minoritaire.
-- La **stratification** préserve le ratio 78 %/22 % dans les deux splits — sans elle, un split aléatoire pourrait produire un test set avec 15 % ou 30 % d'échecs, rendant les métriques incomparables.
-- `random_state=42` garantit la **reproductibilité** — deux exécutions du pipeline donnent exactement les mêmes splits.
-- **Alternatives testées non retenues** : 70/30 aurait réduit le train set à 730 exemples (risque d'underfitting pour le GB), 90/10 aurait produit un test set de 104 exemples (~23 exemples "Échec"), trop petit pour estimer le F1 de façon fiable.
+- **Exploration** : permettre à un utilisateur non-technique de comprendre les données, la distribution de la variable cible et les relations entre variables socio-comportementales et réussite.
+- **Démonstration** : présenter les trois modèles entraînés (Régression Logistique, Random Forest, Gradient Boosting), comparer leurs performances et expliquer leurs prédictions via des outils d'interprétabilité (SHAP, coefficients, importances).
+- **Prédiction interactive** : simuler en temps réel la probabilité de réussite d'un nouvel élève à partir d'un profil saisi manuellement.
 
 ---
 
-## 4. Validation croisée : 5-fold stratifiée
+## 3. Fonctionnalités implémentées
 
-**Choix** : 5-fold cross-validation stratifiée sur le train set pour sélectionner les hyperparamètres.
+### Page 1 — Présentation du projet
 
-**Justification** :
-- Sur 835 exemples d'entraînement, **5 folds** donnent des folds de ~167 exemples (train interne : ~668, validation interne : ~167). C'est un équilibre entre variance des estimations (folds trop petits → estimations bruitées) et coût computationnel (folds trop nombreux → 10-fold ou LOOCV très lents pour le GB).
-- La **stratification** est indispensable : sans elle, un fold pourrait contenir très peu d'exemples "Échec" (classe à 22 %), rendant le F1 macro instable.
-- **5-fold vs 10-fold** : sur un dataset de cette taille, 5-fold et 10-fold donnent des estimations proches. 5-fold est retenu pour le coût computationnel réduit (5 entraînements vs 10 par configuration d'hyperparamètres).
+- **Bannière d'accueil** avec métriques clés (nombre d'élèves, taux de réussite, nombre de features, nombre de modèles).
+- **Section "Le projet"** : contexte métier, objectif de prédiction précoce (avant les notes intermédiaires), description du dataset.
+- **Exploration des données (3 onglets)** :
+  - *Distribution de la cible* : camembert et barres empilées montrant la répartition Réussite/Échec par matière.
+  - *Variables numériques* : histogrammes comparatifs colorés par classe pour les features clés (absences, studytime, failures, goout, age...).
+  - *Variables catégorielles* : taux de réussite par catégorie pour les variables binaires et nominales (higher, internet, Mjob, Fjob...).
+- **Application business** : explication de l'usage pédagogique (détection précoce, déclenchement d'interventions ciblées).
+
+### Page 2 — Modélisation
+
+- **Présentation des 3 modèles** : description de la Régression Logistique, du Random Forest et du Gradient Boosting, avec leurs hyperparamètres clés.
+- **Comparaison des performances** : tableau de métriques (F1 macro, F1 par classe, précision, rappel, accuracy) lu depuis `results/model_metrics.csv`, avec mise en évidence du meilleur score par colonne.
+- **Visualisation des métriques** : graphique en barres groupées comparant les F1-scores des 3 modèles.
+- **Courbes ROC** : courbes AUC pour chaque modèle sur le jeu de test.
+- **Matrices de confusion** : une matrice par modèle, affichées côte à côte.
+- **Interprétation & analyse des erreurs (5 onglets)** :
+  - *Interprétation LR* : coefficients de la régression logistique sous forme de barres horizontales colorées par direction d'effet.
+  - *Feature engineering* : visualisation de l'importance des features construites (`risk_score`, `family_capital`, `study_vs_social`...) dans le Random Forest.
+  - *Cas surprenants* : analyse des faux positifs et faux négatifs, distribution des probabilités sur les erreurs, profil moyen des cas mal classifiés.
+  - *Valeurs SHAP* : summary plot et waterfall plot SHAP pour le Gradient Boosting et le Random Forest — identification des variables les plus influentes par prédiction.
+  - *Analyse des erreurs* : scatter plot probabilité prédite vs label réel, avec coloration des faux positifs/négatifs.
+
+### Page 3 — Démonstration
+
+- **Formulaire de saisie** du profil d'un élève (voir section Inputs).
+- **Prédiction en temps réel** par les 3 modèles dès le clic sur le bouton.
+- **Verdict agrégé** (moyenne des 3 probabilités) avec code couleur : Réussite probable / Profil incertain / Risque d'échec.
+- **Jauge circulaire** (Plotly Indicator) affichant P(Réussite) en pourcentage.
+- **Consensus des 3 modèles** : barres de progression individuelles pour chaque modèle.
+- **Profil de clustering** : assignation de l'élève à un profil type via K-Means (Profil favorable / Profil à risque).
+- **Radar chart** comparant le profil de l'élève saisi au centroïde de son cluster sur 6 dimensions (Étude, Social, Famille, Ambition, Sobriété, Assiduité).
+- **Simulation "et si..."** : sliders permettant de modifier les variables comportementales clés pour observer l'évolution de la probabilité en temps réel.
 
 ---
 
-## 5. Gestion du déséquilibre : `class_weight='balanced'`
+## 4. Inputs utilisateurs
 
-**Choix** : `class_weight='balanced'` pour la Régression Logistique et le Random Forest.
+Les inputs sont tous sur la page **Démonstration**. Ils sont organisés en 3 rangées :
 
-**Justification** :
-- Avec 78 % de réussite, un modèle non pondéré apprend rapidement à prédire "toujours Réussite" — il minimise la perte globale sans rien apprendre sur les élèves en échec.
-- `class_weight='balanced'` multiplie le poids de chaque exemple par `n_samples / (n_classes × n_samples_per_class)`, soit environ **3.5× plus de poids** pour la classe "Échec". Cela force le modèle à ne pas ignorer la classe minoritaire.
-- **Alternative non retenue — SMOTE** : le suréchantillonnage synthétique crée de nouveaux exemples artificiels. Sur un dataset de 1 044 lignes avec des variables mixtes (binaires OHE + ordinales), SMOTE génère des exemples peu réalistes. La pondération est plus simple et aussi efficace.
-- **Gradient Boosting** : `class_weight` n'est pas supporté nativement par `GradientBoostingClassifier`. Le déséquilibre est compensé par l'optimisation itérative — le GB se concentre naturellement sur les exemples mal classifiés, qui sont souvent les exemples "Échec".
-
----
-
-## 6. Hyperparamètres — Régression Logistique
-
-| Hyperparamètre | Valeur | Justification |
+| Input | Type de widget | Plage / Options |
 |---|---|---|
-| `C` | 1.0 | Régularisation L2 standard. C=1.0 est un bon point de départ — ni trop régularisé (underfitting) ni trop peu (overfitting sur 835 exemples). |
-| `max_iter` | 1000 | Le solver lbfgs converge rarement en moins de 100 itérations avec des données scalées mais dépasse les 100 par défaut sur des features corrélées. |
-| `solver` | lbfgs (défaut) | Adapté aux datasets de taille modeste avec régularisation L2. |
-| `class_weight` | balanced | Compense le déséquilibre 78/22 (voir section 5). |
+| Age | Slider | 15 – 22 |
+| Échecs passés | Selectbox | 0, 1, 2, 3 |
+| Temps d'étude / semaine | Selectbox | < 2h, 2–5h, 5–10h, > 10h |
+| Absences (jours) | Slider | 0 – 30 |
+| Sorties avec amis | Slider | 1 – 5 |
+| Relations familiales | Slider | 1 – 5 |
+| Ambition études supérieures | Radio | Oui / Non |
+| Accès internet | Radio | Oui / Non |
+| Éducation mère | Slider | 0 – 4 |
+| Éducation père | Slider | 0 – 4 |
+| Alcool semaine | Slider | 1 – 5 |
+| Alcool weekend | Slider | 1 – 5 |
+| Profession mère | Selectbox | teacher, health, services, at_home, other |
+| Profession père | Selectbox | teacher, health, services, at_home, other |
+
+Les features construites (`alc_total`, `risk_score`, `family_capital`, `study_vs_social`, etc.) sont calculées automatiquement à partir des inputs bruts avant la prédiction — l'utilisateur n'a pas à les renseigner.
 
 ---
 
-## 7. Hyperparamètres — Random Forest
+## 5. Outputs affichés
 
-| Hyperparamètre | Valeur | Justification |
+| Output | Page | Description |
 |---|---|---|
-| `n_estimators` | 200 | 200 arbres offrent une variance faible sans coût computationnel excessif. En dessous de 100, la variance des prédictions est notable. Au-delà de 300, le gain est marginal. |
-| `max_features` | sqrt (défaut) | Racine carrée du nombre de features par split — standard pour la classification. Évite que les features dominantes (risk_score, failures) soient toujours choisies. |
-| `max_depth` | None (défaut) | Les arbres grandissent jusqu'à pureté. L'agrégation de 200 arbres corrige l'overfitting individuel sans limiter la profondeur. |
-| `class_weight` | balanced | Compense le déséquilibre 78/22. |
-| `random_state` | 42 | Reproductibilité. |
+| Métriques clés (4 KPIs) | Présentation | Nombre d'élèves, taux de réussite, features, modèles |
+| Graphiques EDA | Présentation | Camembert, histogrammes, barres de taux de réussite |
+| Tableau de métriques | Modélisation | F1 macro/classe, précision, rappel, accuracy |
+| Graphiques de performance | Modélisation | Barres groupées, courbes ROC, matrices de confusion |
+| Coefficients LR | Modélisation | Barres horizontales colorées par effet positif/négatif |
+| Importances RF | Modélisation | Top features par gain d'impureté |
+| Valeurs SHAP | Modélisation | Summary plot et waterfall plot par modèle |
+| Analyse des erreurs | Modélisation | Scatter, distributions des FP/FN |
+| Verdict de prédiction | Démonstration | Bannière colorée + probabilité moyenne |
+| Jauge Plotly | Démonstration | Indicateur circulaire 0–100 % |
+| Consensus 3 modèles | Démonstration | Barres de progression par modèle |
+| Profil clustering | Démonstration | Libellé et description du cluster K-Means |
+| Radar chart | Démonstration | Profil élève vs centroïde du cluster |
 
 ---
 
-## 8. Hyperparamètres — Gradient Boosting
+## 6. Structure de l'application
 
-| Hyperparamètre | Valeur | Justification |
-|---|---|---|
-| `n_estimators` | 200 | 200 arbres avec un faible learning rate convergent vers une bonne solution sans overfitting sur 835 exemples. |
-| `learning_rate` | 0.05 | Faible learning rate + beaucoup d'estimateurs : approche classique qui généralise mieux que `lr=0.1` + 100 estimateurs. Chaque arbre corrige une petite fraction de l'erreur résiduelle. |
-| `max_depth` | 3 | Arbres peu profonds = apprenants faibles. C'est le principe du boosting : des modèles simples combinés séquentiellement. max_depth=3 évite l'overfitting sur un dataset de 1 044 lignes. |
-| `subsample` | 0.8 | Stochastic Gradient Boosting : chaque arbre est entraîné sur 80 % des données (tirage aléatoire sans remise). Réduit la variance et améliore la généralisation. |
-| `random_state` | 42 | Reproductibilité. |
+```
+src/app.py                  # Point d'entrée Streamlit (fonction build_app())
+├── _load_models()          # Chargement des 3 modèles .joblib + données train/test
+│                           # + K-Means clustering (2 clusters)
+├── _load_raw()             # Chargement des splits scalés et bruts depuis data/processed/
+├── _metrics()              # Calcul des métriques sur le jeu de test
+├── _shap_explainer_gb()    # Explainer SHAP TreeExplainer (GB)
+├── _shap_explainer_rf()    # Explainer SHAP TreeExplainer (RF)
+├── _best_threshold()       # Recherche du seuil optimal en F1-macro
+└── build_app()             # Fonction principale
+    ├── Sidebar             # Navigation radio : 3 pages
+    ├── Page "Présentation" # EDA + contexte métier
+    ├── Page "Modélisation" # Comparaison modèles + interprétabilité
+    └── Page "Démonstration"# Formulaire + prédiction temps réel
+```
 
----
+**Fichiers associés :**
 
-## 9. Standardisation : StandardScaler
-
-**Choix** : StandardScaler (µ=0, σ=1) appliqué sur X_train, puis transformé sur X_test.
-
-**Justification** :
-- La régression logistique avec régularisation L2 est **sensible aux échelles** : une feature avec une grande variance domine la pénalité de régularisation. Le StandardScaler normalise cette influence.
-- Le scaler est **fit uniquement sur X_train** et appliqué à X_test — pas de data leakage. Fitter le scaler sur l'ensemble du dataset ferait "voir" au modèle des informations du test set pendant l'entraînement.
-- **StandardScaler vs MinMaxScaler** : StandardScaler est plus robuste aux distributions asymétriques résiduelles (ex : `absences` après capping à 30). MinMaxScaler est sensible aux valeurs extrêmes.
-- Random Forest et Gradient Boosting sont **insensibles au scaling** (les splits des arbres sont basés sur des rangs), mais les données scalées leur sont fournies pour uniformiser le pipeline.
-
----
-
-## 10. Capping des absences : 30 jours
-
-**Choix** : les valeurs d'`absences` supérieures à 30 sont ramenées à 30.
-
-**Justification** :
-- Le maximum observé est 75 jours, mais le 99e percentile est ~30. Seuls **6 élèves (< 1 %)** dépassent 30 absences.
-- Sans capping, ces 6 valeurs extrêmes dilatent l'échelle de la feature après standardisation, réduisant la résolution pour 99 % des élèves.
-- Le seuil 30 est choisi au **99e percentile** : on conserve l'information "très absent" sans laisser un cas isolé distordre l'échelle.
-
----
-
-## 11. Suppression de G1 et G2
-
-**Choix** : les notes intermédiaires G1 et G2 sont exclues du modèle.
-
-**Justification** :
-- G1 et G2 sont corrélées à G3 avec des coefficients de **0.81 et 0.91** — les inclure ferait dominer ces deux variables et rendrait la prédiction quasi-triviale.
-- **Objectif business** : détecter les élèves en difficulté *en début d'année*, avant toute évaluation. G1 et G2 ne sont pas disponibles à ce moment. Un modèle entraîné avec G1/G2 serait inutilisable en pratique.
-- Sans G1/G2, le modèle doit trouver le signal dans les variables socio-démographiques et comportementales — c'est précisément ce qui le rend actionnable dès la rentrée.
+| Fichier | Rôle |
+|---|---|
+| `src/app.py` | Application Streamlit (1 444 lignes) |
+| `src/config.py` | Chemins, registre des modèles, configuration Streamlit |
+| `src/data.py` | Pipeline de chargement et préparation des données |
+| `src/metrics.py` | Calcul des métriques d'évaluation |
+| `src/results.py` | Sauvegarde des métriques dans `results/model_metrics.csv` |
+| `scripts/main.py` | Orchestration : évaluation + lancement Streamlit |
+| `models/*.joblib` | Modèles entraînés sérialisés |
+| `data/processed/*.csv` | Splits train/test (scalés et bruts) |
+| `results/model_metrics.csv` | Métriques calculées à l'exécution |
 
 ---
 
-## 12. Choix de la métrique principale : F1-score macro
+## 7. Comment lancer l'application
 
-**Choix** : F1-score macro comme métrique d'optimisation et de comparaison.
+### Prérequis
 
-**Justification** :
-- Les classes sont déséquilibrées : **78 % réussite / 22 % échec**. Un modèle prédisant toujours "Réussite" obtiendrait 78 % d'accuracy sans rien apprendre.
-- Le **F1 macro** calcule le F1 indépendamment pour chaque classe, puis fait la moyenne — il accorde le même poids à la classe "Échec" (22 %) et à la classe "Réussite" (78 %).
-- Il combine **précision** (éviter les fausses alertes) et **rappel** (ne pas rater les élèves en difficulté), ce qui est adapté quand les deux types d'erreur ont un coût.
-- **F1 pondéré** non retenu : le F1 pondéré par la fréquence des classes avantagerait la classe majoritaire "Réussite" et masquerait les performances sur "Échec".
+```bash
+# Depuis la racine du projet
+cd ml-poc-project
+python -m venv .venv
+source .venv/bin/activate        # macOS/Linux
+pip install -r requirements.txt
+```
+
+### Lancement complet (recommandé)
+
+La commande suivante évalue les modèles, sauvegarde les métriques, puis lance Streamlit :
+
+```bash
+python scripts/main.py
+```
+
+L'application est alors accessible à l'adresse :
+
+```
+http://localhost:8501
+```
+
+### Lancement direct de Streamlit (sans réévaluation)
+
+Si les modèles ont déjà été évalués et que `results/model_metrics.csv` existe :
+
+```bash
+PYTHONPATH=./src streamlit run src/app.py --server.address localhost --server.port 8501
+```
