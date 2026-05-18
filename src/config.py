@@ -30,12 +30,30 @@ MODEL_METRICS_FILE = RESULTS_DIR / "model_metrics.csv"
 STREAMLIT_HOST = "localhost"
 STREAMLIT_PORT = 8501
 
-# Students must replace this example with their trained models.
+## Students must replace this example with their trained models.
 # Each entry must point to a serialized model saved as `.joblib`, `.pkl`, or `.pickle`.
+##ODELS = {
+    #"model_a": {
+   #    "name": "Model A",
+     #   "description": "A simple baseline model.",
+     #   "path": MODELS_DIR / "model_a.pkl",
+   # },
+#}
+
 MODELS = {
-    "model_a": {
-        "name": "Model A",
-        "description": "A simple baseline model.",
-        "path": MODELS_DIR / "model_a.pkl",
+    "logistic_regression": {
+        "name": "Régression Logistique",
+        "description": "Baseline linéaire interprétable avec class_weight='balanced'.",
+        "path": MODELS_DIR / "logistic_regression.joblib",
+    },
+    "random_forest": {
+        "name": "Random Forest",
+        "description": "Ensemble d'arbres robuste aux non-linéarités et à la multicolinéarité.",
+        "path": MODELS_DIR / "random_forest.joblib",
+    },
+    "gradient_boosting": {
+        "name": "Gradient Boosting",
+        "description": "Boosting séquentiel, état de l'art sur données tabulaires.",
+        "path": MODELS_DIR / "gradient_boosting.joblib",
     },
 }
